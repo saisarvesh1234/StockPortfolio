@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P&amp;L% view</title>
+<link rel="stylesheet" href="style.css">
+<style>#note{margin-left:auto;color:var(--mut)}.ctl{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.ctl label{display:flex;gap:6px;align-items:center;color:var(--mut)}select{width:auto}</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top"><h1>P&amp;L% by stock</h1></div>
+<div class="card ctl">
+  <label>From % <input type="number" step="any" id="lo" placeholder="min"></label>
+  <label>To % <input type="number" step="any" id="hi" placeholder="max"></label>
+  <label>Sort <select id="sort"><option value="desc">Largest move first</option><option value="asc">Smallest move first</option><option value="az">A to Z</option></select></label>
+  <button id="clr">Clear range</button><span id="note"></span>
+</div>
+<div class="split">
+  <section class="card"><h2 class="pos"><span>Gainers</span><span id="pt"></span></h2><div id="pos"></div></section>
+  <section class="card"><h2 class="neg"><span>Losers</span><span id="nt"></span></h2><div id="neg"></div></section>
+</div>
+</main>
+<script src="common.js"></script>
+<script>
+renderNav('/pnl');
+let S = {stocks: []};
+function render() {
+  const num = id => $(id).value === '' ? null : Number($(id).value) / 100;
+  const lo = num('#lo') ?? -Infinity, hi = num('#hi') ?? Infinity;
+  const open = S.stocks.map(s => ({s, c: calc(s)})).filter(x => x.c.q > 0 && isFinite(x.c.pct));
+  const inr = open.filter(x => x.c.pct >= lo && x.c.pct <= hi);
+  const mx = Math.max(0.001, ...inr.map(x => Math.abs(x.c.pct)));
+  const mode = $('#sort').value;
+  const order = mode === 'az' ? (a, b) => a.s.symbol.localeCompare(b.s.symbol)
+    : mode === 'asc' ? (a, b) => Math.abs(a.c.pct) - Math.abs(b.c.pct) : (a, b) => Math.abs(b.c.pct) - Math.abs(a.c.pct);
+  const side = (list, k, box, tot) => {
+    list.sort(order);
+    $(box).innerHTML = list.map(x => `<div class="row"><span>${esc(x.s.symbol)}</span><div class="trk"><i style="width:${Math.abs(x.c.pct) / mx * 100}%;background:var(--${k})"></i></div><b class="${k}">${(x.c.pct * 100).toFixed(2)}%</b><small>${n2(x.c.pl)}</small></div>`).join('') || '<div class="empty">None in this range.</div>';
+    $(tot).textContent = list.length + (list.length === 1 ? ' stock' : ' stocks');
+  };
+  side(inr.filter(x => x.c.pct >= 0), 'pos', '#pos', '#pt');
+  side(inr.filter(x => x.c.pct < 0), 'neg', '#neg', '#nt');
+  $('#note').textContent = `Showing ${inr.length} of ${open.length} stocks with open shares`;
+}
+['#lo', '#hi'].forEach(id => $(id).addEventListener('input', render));
+$('#sort').addEventListener('change', render);
+$('#clr').onclick = () => { $('#lo').value = ''; $('#hi').value = ''; render(); };
+fetch(apiURL('/api/portfolio')).then(r => r.json()).then(d => { S = d; render(); });
+</script>
+</body>
+</html>

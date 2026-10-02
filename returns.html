@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1-day returns</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top"><h1>1-day returns <small>Change since the previous close</small></h1><span id="status"></span><button class="p" id="refresh">Refresh prices</button></div>
+<div class="grid k" id="kpi"></div>
+<div class="card">
+  <h2>By stock</h2>
+  <table style="min-width:700px"><thead><tr><th>Stock</th><th>Qty held</th><th>Prev close</th><th>LTP</th><th>1D change</th><th>1D return %</th><th>1D value</th></tr></thead>
+  <tbody id="rows"></tbody>
+  </table>
+</div>
+</main>
+<script src="common.js"></script>
+<script>
+renderNav('/returns');
+let S = {stocks: []};
+function render() {
+  const rows = S.stocks.map(s => ({s, c: calc(s)})).filter(x => x.c.q > 0);
+  const withDay = rows.filter(x => x.c.day);
+  const sumChg = withDay.reduce((a, x) => a + x.c.day.value, 0);
+  const baseVal = withDay.reduce((a, x) => a + x.c.q * (Number(x.s.prevClose) || 0), 0);
+  const overallPct = baseVal ? sumChg / baseVal : NaN;
+  $('#kpi').innerHTML = [
+    ['Portfolio 1D change', (sumChg >= 0 ? '+' : '') + '₹' + n2(sumChg), cls(sumChg)],
+    ['Portfolio 1D return %', (isFinite(overallPct) ? (overallPct >= 0 ? '+' : '') : '') + pct(overallPct), cls(sumChg)],
+    ['Stocks with prev close', withDay.length + ' / ' + rows.length, ''],
+  ].map(([l, v, c]) => `<div class="card"><div class="kl">${l}</div><div class="kv ${c}">${v}</div></div>`).join('');
+
+  $('#rows').innerHTML = rows.map(({s, c}) => {
+    const d = c.day;
+    return `<tr><td><b>${esc(s.symbol) || '—'}</b> <span class="kl">${s.exchange}</span></td><td>${c.q}</td>`
+      + `<td>${d ? n2(s.prevClose) : '–'}</td><td>${n2(s.ltp)}</td>`
+      + `<td class="${d ? cls(d.chg) : ''}">${d ? n2(d.chg) : '–'}</td>`
+      + `<td class="${d ? cls(d.chg) : ''}">${d ? pct(d.pct) : '–'}</td>`
+      + `<td class="${d ? cls(d.value) : ''}">${d ? n2(d.value) : '–'}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">No open holdings yet.</td></tr>';
+}
+
+$('#refresh').onclick = async e => {
+  const b = e.target; b.disabled = true;
+  await doRefresh($('#status'), portfolio => { S = portfolio; render(); });
+  b.disabled = false;
+};
+
+fetch(apiURL('/api/portfolio')).then(r => r.json()).then(d => { S = d; render(); });
+</script>
+</body>
+</html>

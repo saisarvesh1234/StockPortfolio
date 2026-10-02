@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio dashboard</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top">
+  <h1>Portfolio <small id="asof"></small></h1>
+  <span id="status"></span>
+  <button id="addStock">Add stock</button>
+  <button class="p" id="refresh">Refresh prices</button>
+</div>
+
+<div class="grid k" id="kpi"></div>
+<div class="grid two">
+  <div class="card"><h2>Allocation by current value</h2><div class="donut" id="alloc"></div></div>
+  <div class="card"><h2>Profit and loss by stock</h2><div id="bars"></div></div>
+</div>
+<div class="card" style="margin-bottom:16px">
+  <div class="hd2"><h2>Holdings</h2>
+    <button class="cbtn" id="holdingsToggle" data-collapse="holdings"></button>
+    <label>Search <input id="q" placeholder="Symbol…" style="width:130px"></label>
+    <label>Sort by <select id="sortField"><option value="">None</option><option value="q">Qty</option><option value="cv">Current value</option><option value="inv">Invested</option></select></label>
+    <label>Order <select id="sortDir"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
+  </div>
+  <div id="holdingsBody">
+  <table><thead><tr><th>Stock</th><th>Qty</th><th>Avg price</th><th>LTP</th><th>Invested</th><th>Current value</th><th>P&amp;L</th><th>P&amp;L%</th></tr></thead>
+  <tbody id="rows"></tbody><tfoot id="foot"></tfoot></table>
+  </div>
+</div>
+<div class="card" id="detail"></div>
+<div class="card" id="booked" style="margin-top:16px"></div>
+<div class="card" id="dividendCard" style="margin-top:16px"></div>
+</main>
+
+<script src="common.js"></script>
+<script>
+renderNav('/dashboard');
+let S = {stocks: []}, sel = 0;
+const txnPage = {n: 7}, bookedPage = {n: 7}, dividendPage = {n: 7};
+
+window.render = function render() {
+  const cs = S.stocks.map(calc);
+  const TI = cs.reduce((a, c) => a + c.inv, 0), TC = cs.reduce((a, c) => a + c.cv, 0), P = TC - TI, RP = cs.reduce((a, c) => a + c.real, 0);
+  if (sel >= S.stocks.length) sel = Math.max(0, S.stocks.length - 1);
+  const hCollapsed = isCollapsed('holdings');
+  $('#holdingsBody').style.display = hCollapsed ? 'none' : '';
+  $('#holdingsToggle').textContent = hCollapsed ? '▸ Expand' : '▾ Minimize';
+  const times = S.stocks.map(s => s.refreshed).filter(Boolean).sort();
+  $('#asof').textContent = times.length ? 'Prices as of ' + times[times.length - 1] : 'Prices not refreshed yet';
+
+  $('#kpi').innerHTML = [['Invested (open shares)', '₹' + n2(TI), ''], ['Current value', '₹' + n2(TC), ''],
+    ['Current profit', (P > 0 ? '+' : '') + '₹' + n2(P), cls(P)], ['Total P&L%', pct(TI ? rnd(P / TI) : NaN), cls(P)],
+    ['Realized profit (sells)', (RP > 0 ? '+' : '') + '₹' + n2(RP), cls(RP)]]
+    .map(([l, v, c]) => `<div class="card"><div class="kl">${l}</div><div class="kv ${c}">${v}</div></div>`).join('');
+
+  const COL = ['#2b6cb0', '#0f9d76', '#d69e2e', '#805ad5', '#dd6b20', '#319795', '#b83280', '#718096'];
+  let acc = 0;
+  const arcs = TC > 0 ? cs.map((c, i) => { const p = c.cv / TC * 100; const e = `<circle cx="21" cy="21" r="15.915" fill="none" stroke="${COL[i % COL.length]}" stroke-width="6" stroke-dasharray="${p} ${100 - p}" stroke-dashoffset="${-acc}"/>`; acc += p; return e; }).join('') : '';
+  $('#alloc').innerHTML = TC > 0
+    ? `<svg viewBox="0 0 42 42" role="img" aria-label="Allocation donut"><circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--line)" stroke-width="6"/>${arcs}</svg>`
+      + `<div class="leg">${S.stocks.map((s, i) => `<div><i style="background:${COL[i % COL.length]}"></i>${esc(s.symbol) || '—'}<b>${(cs[i].cv / TC * 100).toFixed(1)}%</b></div>`).join('')}</div>`
+    : '<div class="empty">Add a stock with a price to see allocation.</div>';
+
+  const mx = Math.max(1, ...cs.map(c => Math.abs(c.pl)));
+  $('#bars').innerHTML = S.stocks.map((s, i) => { const c = cs[i], w = Math.abs(c.pl) / mx * 50;
+    return `<div class="brow"><span>${esc(s.symbol) || '—'}</span><div class="trk"><i style="background:var(--${c.pl < 0 ? 'neg' : 'pos'});${c.pl < 0 ? 'right' : 'left'}:50%;width:${w}%"></i></div><b class="${cls(c.pl)}">${n2(c.pl)}</b></div>`; }).join('') || '<div class="empty">No holdings yet.</div>';
+
+  // Holdings: search + sort (original index kept in idx so edits still target the right stock)
+  let list = S.stocks.map((s, idx) => ({s, c: cs[idx], idx}));
+  const qv = $('#q').value.trim().toLowerCase();
+  if (qv) list = list.filter(x => x.s.symbol.toLowerCase().includes(qv));
+  const field = $('#sortField').value, dir = $('#sortDir').value === 'asc' ? 1 : -1;
+  const key = {q: x => x.c.q, cv: x => x.c.cv, inv: x => x.c.inv}[field];
+  if (key) list.sort((a, b) => (key(a) - key(b)) * dir);
+
+  $('#rows').innerHTML = list.map(({s, c, idx}) =>
+    `<tr data-sel="${idx}" tabindex="0" class="${idx === sel ? 'on' : ''}"><td><b>${esc(s.symbol) || '—'}</b> <span class="kl">${s.exchange}</span></td><td>${c.q}</td><td>${n2(c.avg)}</td><td>${n2(s.ltp)}</td><td>${n2(c.inv)}</td><td>${n2(c.cv)}</td><td class="${cls(c.pl)}">${n2(c.pl)}</td><td class="${cls(c.pl)}">${pct(c.pct)}</td></tr>`
+  ).join('') || `<tr><td colspan="8" class="empty">${qv ? 'No stock matches your search.' : 'No stocks yet.'}</td></tr>`;
+  $('#foot').innerHTML = S.stocks.length ? `<tr><td>Total</td><td></td><td></td><td></td><td>${n2(TI)}</td><td>${n2(TC)}</td><td class="${cls(P)}">${n2(P)}</td><td class="${cls(P)}">${pct(TI ? rnd(P / TI) : NaN)}</td></tr>` : '';
+
+  // Selected stock detail: transactions and profit booking, both newest-first, 7 at a time
+  const s = S.stocks[sel];
+  if (!s) { $('#detail').innerHTML = '<div class="empty">No stocks yet. Choose Add stock to start.</div>'; $('#booked').innerHTML = ''; $('#dividendCard').innerHTML = ''; return; }
+  const c = cs[sel];
+  const a = `data-i="${sel}"`;
+  const sortedTxns = s.txns.map((t, k) => ({...t, k})).sort((x, y) => (y.date || '').localeCompare(x.date || '') || y.k - x.k);
+  const tp = pager(txnPage, sortedTxns.length);
+  const txnCollapsed = isCollapsed('txn');
+  $('#detail').innerHTML = `<div class="hd2"><h2>Transactions</h2>${collapseBtn('txn')}
+    <label>Symbol <input class="s" ${a} data-f="symbol" value="${esc(s.symbol)}" placeholder="e.g. ITC"></label>
+    <label>Exchange <select ${a} data-f="exchange">${['NSE', 'BSE', 'US'].map(x => `<option${x === s.exchange ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+    <label>LTP <input type="number" step="any" min="0" ${a} data-f="ltp" value="${esc(s.ltp)}"></label>
+    <button data-act="addTxn" ${a}>Add transaction</button><button data-act="delStock" ${a}>Delete stock</button></div>`
+    + (txnCollapsed ? '' : (c.bad ? '<p class="neg">A sell is larger than the shares held on that date. Check the dates and quantities.</p>' : '')
+    + `<table style="min-width:560px"><thead><tr><th>Type</th><th>Label</th><th>Date</th><th>Qty</th><th>Price</th><th>Amount</th><th></th></tr></thead><tbody>`
+    + sortedTxns.slice(0, tp.shown).map(t => { const b = `${a} data-j="${t.k}"`;
+      return `<tr><td><select style="width:80px" ${b} data-f="type">${['BUY', 'SELL'].map(x => `<option value="${x}"${x === (t.type || 'BUY') ? ' selected' : ''}>${x[0] + x.slice(1).toLowerCase()}</option>`).join('')}</select></td><td><input style="width:70px" ${b} data-f="label" value="${esc(t.label)}"></td><td><input type="date" ${b} data-f="date" value="${esc(t.date)}"></td><td><input type="number" step="any" min="0" ${b} data-f="qty" value="${esc(t.qty)}"></td><td><input type="number" step="any" min="0" ${b} data-f="price" value="${esc(t.price)}"></td><td>${n2(t.qty * t.price)}</td><td><button class="x" title="Delete transaction" data-act="delTxn" ${b}>×</button></td></tr>`; }).join('')
+    + `</tbody></table>${tp.button('txnMore')}`);
+
+  const sortedSells = c.sells.slice().sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+  const bp = pager(bookedPage, sortedSells.length);
+  const bookedCollapsed = isCollapsed('booked');
+  $('#booked').innerHTML = `<div class="hd2"><h2>Profit booking <span class="kl">for ${esc(s.symbol) || 'this stock'}</span></h2>${collapseBtn('booked')}<span class="kl">Profit booked = (sell price − average before the sell) × qty sold</span></div>`
+    + (bookedCollapsed ? '' : (sortedSells.length ? `<table style="min-width:560px"><thead><tr><th>Date</th><th>Qty sold</th><th>Sell price</th><th>Avg before sell</th><th>Profit / share</th><th>Profit booked</th></tr></thead><tbody>`
+      + sortedSells.slice(0, bp.shown).map(x => `<tr><td>${dt(x.date)}</td><td>${x.qty}</td><td>${n2(x.price)}</td><td>${n2(x.avg)}</td><td class="${cls(x.share)}">${n2(x.share)}</td><td class="${cls(x.profit)}">${n2(x.profit)}</td></tr>`).join('')
+      + `</tbody></table>${bp.button('bookedMore')}`
+      : '<div class="empty">No sells yet for this stock.</div>'));
+
+  const divEntries = (s.dividends || []).map(d => ({...d, qty: qtyOnDate(s, d.date)})).filter(e => e.qty > 0.0001).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+  const divTotal = divEntries.reduce((a, e) => a + e.qty * e.amount, 0);
+  const dvp = pager(dividendPage, divEntries.length);
+  const dividendCollapsed = isCollapsed('dividend');
+  $('#dividendCard').innerHTML = `<div class="hd2"><h2>Dividends <span class="kl">for ${esc(s.symbol) || 'this stock'}</span></h2>${collapseBtn('dividend')}<button id="fetchDivDash">Fetch dividend data</button>${s.dividendsRefreshed ? `<span class="kl">as of ${esc(s.dividendsRefreshed)}</span>` : ''}</div>`
+    + (dividendCollapsed ? '' : (divEntries.length ? `<table style="min-width:520px"><thead><tr><th>Ex-date</th><th>Qty held</th><th>Per share</th><th>Received</th></tr></thead><tbody>`
+      + divEntries.slice(0, dvp.shown).map(e => `<tr><td>${dt(e.date)}</td><td>${e.qty}</td><td>${n2(e.amount)}</td><td class="pos">${n2(e.qty * e.amount)}</td></tr>`).join('')
+      + `</tbody><tfoot><tr><td>Total</td><td></td><td></td><td class="pos">${n2(divTotal)}</td></tr></tfoot></table>${dvp.button('dividendMore')}`
+      : `<div class="empty">${s.dividendsRefreshed ? 'No dividends recorded for this stock while you held shares.' : 'No dividend data yet — choose Fetch dividend data.'}</div>`));
+}
+
+document.addEventListener('change', e => {
+  const el = e.target, f = el.dataset.f; if (!f) return;
+  const s = S.stocks[el.dataset.i];
+  const v = el.type === 'number' ? Number(el.value) : f === 'symbol' ? el.value.trim().toUpperCase() : el.value;
+  (el.dataset.j !== undefined ? s.txns[el.dataset.j] : s)[f] = v;
+  save(S); render();
+});
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'txnMore') { txnPage.n += 7; render(); return; }
+  if (e.target.id === 'bookedMore') { bookedPage.n += 7; render(); return; }
+  if (e.target.id === 'dividendMore') { dividendPage.n += 7; render(); return; }
+  if (e.target.id === 'fetchDivDash') {
+    e.target.disabled = true; $('#status').textContent = 'Fetching dividend history…';
+    save(S).then(() => fetch(apiURL('/api/dividends/refresh'), {method: 'POST'})).then(r => r.json()).then(d => {
+      S = d.portfolio; dividendPage.n = 7; render();
+      $('#status').textContent = d.failed.length ? 'No dividend data for: ' + d.failed.join(', ') : 'Dividend data updated';
+    }).catch(() => { $('#status').textContent = 'Dividend fetch failed. Check the server is running and you are online.'; });
+    return;
+  }
+  const r = e.target.closest('tr[data-sel]');
+  if (r) { sel = +r.dataset.sel; txnPage.n = 7; bookedPage.n = 7; dividendPage.n = 7; render(); return; }
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const s = S.stocks[b.dataset.i], j = b.dataset.j;
+  if (b.dataset.act === 'addTxn') s.txns.push({label: 'T' + (s.txns.length + 1), date: today(), qty: 1, price: 0, type: 'BUY'});
+  if (b.dataset.act === 'delTxn') { if (!confirm('Delete this transaction?')) return; s.txns.splice(j, 1); if (!s.txns.length) S.stocks.splice(b.dataset.i, 1); }
+  if (b.dataset.act === 'delStock') { if (!confirm('Delete ' + (s.symbol || 'this stock') + ' and all its transactions?')) return; S.stocks.splice(b.dataset.i, 1); }
+  save(S); render();
+});
+document.addEventListener('keydown', e => { const r = e.target.closest?.('tr[data-sel]'); if (r && e.key === 'Enter') r.click(); });
+['#q', '#sortField', '#sortDir'].forEach(id => $(id).addEventListener('input', render));
+
+$('#addStock').onclick = () => {
+  S.stocks.push({symbol: '', exchange: 'NSE', ltp: 0, prevClose: null, refreshed: '', txns: [{label: 'T1', date: today(), qty: 1, price: 0, type: 'BUY'}]});
+  sel = S.stocks.length - 1; txnPage.n = 7; bookedPage.n = 7; dividendPage.n = 7; save(S); render(); $('#detail input.s').focus();
+};
+
+$('#refresh').onclick = async e => {
+  const b = e.target; b.disabled = true;
+  await save(S);
+  await doRefresh($('#status'), portfolio => { S = portfolio; render(); });
+  b.disabled = false;
+};
+
+fetch(apiURL('/api/portfolio')).then(r => r.json()).then(d => { S = d; render(); });
+</script>
+</body>
+</html>

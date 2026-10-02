@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profit booked</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top"><h1>Profit booked <small>Every sell, across all stocks, newest first</small></h1></div>
+<div class="grid k" id="kpi"></div>
+<div class="card">
+  <h2>All sells</h2>
+  <table style="min-width:700px"><thead><tr><th>Date</th><th style="text-align:left">Stock</th><th>Qty sold</th><th>Sell price</th><th>Avg before sell</th><th>Profit / share</th><th>Profit booked</th></tr></thead>
+  <tbody id="rows"></tbody><tfoot id="foot"></tfoot></table>
+</div>
+</main>
+<script src="common.js"></script>
+<script>
+renderNav('/booked');
+fetch(apiURL('/api/portfolio')).then(r => r.json()).then(d => {
+  const cs = d.stocks.map(calc);
+  const RP = cs.reduce((a, c) => a + c.real, 0);
+  const sold = d.stocks.flatMap((s, i) => cs[i].sells.map(x => ({...x, sym: s.symbol}))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  $('#kpi').innerHTML = [['Total profit booked', (RP > 0 ? '+' : '') + '₹' + n2(RP), cls(RP)], ['Sells recorded', sold.length, '']]
+    .map(([l, v, c]) => `<div class="card"><div class="kl">${l}</div><div class="kv ${c}">${v}</div></div>`).join('');
+  $('#rows').innerHTML = sold.map(x => `<tr><td>${dt(x.date)}</td><td style="text-align:left"><b>${esc(x.sym) || '—'}</b></td><td>${x.qty}</td><td>${n2(x.price)}</td><td>${n2(x.avg)}</td><td class="${cls(x.share)}">${n2(x.share)}</td><td class="${cls(x.profit)}">${n2(x.profit)}</td></tr>`).join('')
+    || '<tr><td colspan="7" class="empty">No sells yet. Add a transaction and set its type to Sell.</td></tr>';
+  $('#foot').innerHTML = sold.length ? `<tr><td>Total</td><td></td><td></td><td></td><td></td><td></td><td class="${cls(RP)}">${n2(RP)}</td></tr>` : '';
+});
+</script>
+</body>
+</html>

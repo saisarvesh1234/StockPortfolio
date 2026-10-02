@@ -1,0 +1,200 @@
+{
+  "stocks": [
+    {
+      "exchange": "NSE",
+      "ltp": 737.25,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:27",
+      "symbol": "HDFCBANK",
+      "txns": [
+        {
+          "date": "2026-08-06",
+          "label": "T1",
+          "price": 735.2,
+          "qty": 1,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-08-06",
+          "label": "T2",
+          "price": 735.05,
+          "qty": 3,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-08-11",
+          "label": "T3",
+          "price": 727.7,
+          "qty": 1,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 270.15,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:27",
+      "symbol": "ITC",
+      "txns": [
+        {
+          "date": "2026-06-05",
+          "label": "T1",
+          "price": 280.4,
+          "qty": 1,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-07-09",
+          "label": "T2",
+          "price": 283.65,
+          "qty": 1,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-07-09",
+          "label": "T3",
+          "price": 283.35,
+          "qty": 1,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-08-26",
+          "label": "T4",
+          "price": 271.85,
+          "qty": 2,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-09-22",
+          "label": "T5",
+          "price": 265,
+          "qty": 1,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 267.1,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:27",
+      "symbol": "NLCINDIA",
+      "txns": [
+        {
+          "date": "2026-07-23",
+          "label": "T1",
+          "price": 291,
+          "qty": 3,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 326,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:27",
+      "symbol": "NTPC",
+      "txns": [
+        {
+          "date": "2026-07-23",
+          "label": "T1",
+          "price": 348.75,
+          "qty": 3,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-08-21",
+          "label": "T2",
+          "price": 338,
+          "qty": 3,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 346,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:27",
+      "symbol": "PFC",
+      "txns": [
+        {
+          "date": "2026-08-06",
+          "label": "T1",
+          "price": 414,
+          "qty": 3,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-08-11",
+          "label": "T2",
+          "price": 382,
+          "qty": 2,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-09-22",
+          "label": "T3",
+          "price": 344,
+          "qty": 4,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 236.9,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:28",
+      "symbol": "ONGC",
+      "txns": [
+        {
+          "date": "2026-08-26",
+          "label": "T1",
+          "price": 233.51,
+          "qty": 4,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    },
+    {
+      "exchange": "NSE",
+      "ltp": 252.66,
+      "prevClose": null,
+      "refreshed": "23-Sep-2026 20:09:28",
+      "symbol": "SETFNIF50",
+      "txns": [
+        {
+          "date": "2026-09-07",
+          "label": "T1",
+          "price": 256.55,
+          "qty": 6,
+          "type": "BUY"
+        },
+        {
+          "date": "2026-09-17",
+          "label": "T2",
+          "price": 250,
+          "qty": 4,
+          "type": "BUY"
+        }
+      ],
+      "dividends": [],
+      "dividendsRefreshed": null
+    }
+  ]
+}

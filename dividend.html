@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dividend paid</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top">
+  <h1>Dividend paid <small id="asof">Not fetched yet</small></h1>
+  <span id="status"></span>
+  <button class="p" id="fetchDiv">Fetch dividend data</button>
+</div>
+<p class="kl" style="max-width:640px">
+  Dividend received for each payout = quantity of shares held on the ex-dividend date × dividend per share,
+  worked out from your buy/sell transactions. This is an estimate — it doesn't account for corporate actions
+  like splits or bonus issues.
+</p>
+<div class="grid k" id="kpi"></div>
+<div class="card" style="margin-bottom:16px">
+  <h2>By stock</h2>
+  <table><thead><tr><th>Stock</th><th>Qty held now</th><th>Payouts counted</th><th>Total dividend received</th></tr></thead>
+  <tbody id="rows"></tbody><tfoot id="foot"></tfoot></table>
+</div>
+<div class="card">
+  <h2>All payouts</h2>
+  <table style="min-width:640px"><thead><tr><th>Ex-date</th><th style="text-align:left">Stock</th><th>Qty held</th><th>Per share</th><th>Received</th></tr></thead>
+  <tbody id="allRows"></tbody></table>
+  <div id="pagerBtn"></div>
+</div>
+</main>
+<script src="common.js"></script>
+<script>
+renderNav('/dividend');
+let S = {stocks: []};
+const page = {n: 7};
+
+function render() {
+  const times = S.stocks.map(s => s.dividendsRefreshed).filter(Boolean).sort();
+  $('#asof').textContent = times.length ? 'Dividend data as of ' + times[times.length - 1] : 'Not fetched yet — choose Fetch dividend data';
+
+  const perStock = S.stocks.map(s => {
+    const entries = (s.dividends || []).map(d => ({...d, qty: qtyOnDate(s, d.date), stock: s.symbol}))
+      .filter(e => e.qty > 0.0001);
+    const total = entries.reduce((a, e) => a + e.qty * e.amount, 0);
+    return {s, entries, total};
+  });
+  const grand = perStock.reduce((a, p) => a + p.total, 0);
+  const fetched = S.stocks.filter(s => s.dividendsRefreshed).length;
+
+  $('#kpi').innerHTML = [
+    ['Total dividends received', '₹' + n2(grand), grand > 0 ? 'pos' : ''],
+    ['Stocks with dividend data', fetched + ' / ' + S.stocks.length, ''],
+  ].map(([l, v, c]) => `<div class="card"><div class="kl">${l}</div><div class="kv ${c}">${v}</div></div>`).join('');
+
+  $('#rows').innerHTML = perStock.map(({s, entries, total}) =>
+    `<tr><td><b>${esc(s.symbol) || '—'}</b> <span class="kl">${s.exchange}</span></td><td>${qtyOnDate(s, today())}</td><td>${entries.length}</td><td class="${total > 0 ? 'pos' : ''}">${n2(total)}</td></tr>`
+  ).join('') || '<tr><td colspan="4" class="empty">No stocks yet.</td></tr>';
+  $('#foot').innerHTML = S.stocks.length ? `<tr><td>Total</td><td></td><td></td><td class="pos">${n2(grand)}</td></tr>` : '';
+
+  const all = perStock.flatMap(p => p.entries).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const p = pager(page, all.length);
+  $('#allRows').innerHTML = all.slice(0, p.shown).map(e =>
+    `<tr><td>${dt(e.date)}</td><td style="text-align:left"><b>${esc(e.stock)}</b></td><td>${e.qty}</td><td>${n2(e.amount)}</td><td class="pos">${n2(e.qty * e.amount)}</td></tr>`
+  ).join('') || '<tr><td colspan="5" class="empty">No dividend data yet — choose Fetch dividend data above.</td></tr>';
+  $('#pagerBtn').innerHTML = p.button('divMore');
+}
+
+document.addEventListener('click', e => { if (e.target.id === 'divMore') { page.n += 7; render(); } });
+
+$('#fetchDiv').onclick = async e => {
+  const b = e.target; b.disabled = true; $('#status').textContent = 'Fetching dividend history…';
+  try {
+    const d = await (await fetch(apiURL('/api/dividends/refresh'), {method: 'POST'})).json();
+    S = d.portfolio; page.n = 7; render();
+    $('#status').textContent = d.failed.length ? 'No dividend data for: ' + d.failed.join(', ') : 'Dividend data updated';
+  } catch { $('#status').textContent = 'Fetch failed. Check the server is running and you are online.'; }
+  b.disabled = false;
+};
+
+fetch(apiURL('/api/portfolio')).then(r => r.json()).then(d => { S = d; render(); });
+</script>
+</body>
+</html>

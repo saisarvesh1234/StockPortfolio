@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download portfolio</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.dz{border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--mut)}
+.dz.over{border-color:var(--acc);color:var(--ink);background:var(--sel)}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px}
+.msg.ok{background:color-mix(in srgb, var(--pos) 15%, transparent);color:var(--pos)}
+.msg.err{background:color-mix(in srgb, var(--neg) 15%, transparent);color:var(--neg)}
+.stack{display:grid;gap:16px;max-width:640px}
+.filename{font-weight:600}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+<div class="top"><h1>Download portfolio <small>Move this data to or from another PC's local server</small></h1></div>
+<div class="stack">
+  <div class="card">
+    <h2>Download</h2>
+    <p class="kl">Saves everything currently in this portfolio — every stock, transaction and price — as one JSON file.</p>
+    <button class="p" id="dl">Download portfolio file</button>
+    <div id="dlMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Upload / import</h2>
+    <p class="kl">On the other PC: run this app there, open its own "Download portfolio" page, and upload the file you downloaded here. This replaces whatever portfolio is currently on that server, so download a backup first if you want to keep it.</p>
+    <div class="dz" id="dz">
+      <div id="pick">Drag a portfolio JSON file here, or <label style="color:var(--acc);text-decoration:underline;cursor:pointer">choose a file<input type="file" id="file" accept="application/json,.json" style="display:none"></label></div>
+      <div id="picked" style="display:none">
+        <div class="filename" id="fname"></div>
+        <div class="kl" id="fsummary"></div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+      <button class="p" id="doImport" disabled>Import into this portfolio</button>
+      <button id="clearFile" style="display:none">Choose a different file</button>
+    </div>
+    <div id="upMsg"></div>
+  </div>
+</div>
+</main>
+<script src="common.js"></script>
+<script>
+renderNav('/download');
+
+// Without this, dropping outside the exact drop-zone pixels (or a fraction of a
+// second before it's fully registered) makes the browser navigate to the file
+// itself instead of firing our drop handler — this is the fix for that.
+['dragenter', 'dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+
+$('#dl').onclick = async () => {
+  const msg = $('#dlMsg'); msg.className = 'msg'; msg.textContent = 'Preparing file…';
+  try {
+    const d = await (await fetch(apiURL('/api/portfolio'))).json();
+    const blob = new Blob([JSON.stringify(d, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = URL.createObjectURL(blob);
+    a.download = `portfolio-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+    msg.className = 'msg ok'; msg.textContent = `Downloaded ${d.stocks.length} stock(s).`;
+  } catch { msg.className = 'msg err'; msg.textContent = 'Could not read the portfolio. Check that the server is running.'; }
+};
+
+let pendingData = null;
+
+function summarize(d) {
+  const n = d.stocks.length;
+  const txns = d.stocks.reduce((a, s) => a + (s.txns || []).length, 0);
+  return `${n} stock${n === 1 ? '' : 's'}, ${txns} transaction${txns === 1 ? '' : 's'}`;
+}
+
+function handleFile(file) {
+  const upMsg = $('#upMsg'); upMsg.className = 'msg';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch { upMsg.className = 'msg err'; upMsg.textContent = 'That file is not valid JSON.'; return; }
+    if (!data || !Array.isArray(data.stocks)) {
+      upMsg.className = 'msg err'; upMsg.textContent = "That file doesn't look like a portfolio export (no \"stocks\" list found).";
+      return;
+    }
+    pendingData = data;
+    $('#pick').style.display = 'none'; $('#picked').style.display = '';
+    $('#fname').textContent = file.name;
+    $('#fsummary').textContent = summarize(data);
+    $('#doImport').disabled = false;
+    $('#clearFile').style.display = '';
+    upMsg.textContent = '';
+  };
+  reader.onerror = () => { upMsg.className = 'msg err'; upMsg.textContent = 'Could not read that file.'; };
+  reader.readAsText(file);
+}
+
+$('#file').addEventListener('change', e => handleFile(e.target.files[0]));
+const dz = $('#dz');
+['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
+dz.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+
+$('#clearFile').onclick = () => {
+  pendingData = null; $('#file').value = '';
+  $('#pick').style.display = ''; $('#picked').style.display = 'none';
+  $('#doImport').disabled = true; $('#clearFile').style.display = 'none';
+  $('#upMsg').textContent = '';
+};
+
+$('#doImport').onclick = async () => {
+  if (!pendingData) return;
+  if (!confirm(`Import ${summarize(pendingData)}? This replaces the portfolio currently on this server.`)) return;
+  const upMsg = $('#upMsg'); upMsg.className = 'msg'; upMsg.textContent = 'Importing…';
+  try {
+    const r = await fetch(apiURL('/api/portfolio'), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(pendingData)});
+    const d = await r.json();
+    if (!r.ok || d.ok === false) throw new Error(d.error || 'Import failed');
+    upMsg.className = 'msg ok'; upMsg.textContent = 'Imported. Open the Dashboard to see it.';
+  } catch (e) { upMsg.className = 'msg err'; upMsg.textContent = 'Import failed: ' + e.message; }
+};
+</script>
+</body>
+</html>
